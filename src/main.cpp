@@ -11,20 +11,17 @@
 #include <Arduino.h>
 #include <Tiny4kOLED.h>
 
-#define M1 3 //0
+#define M1 3 
 #define M2 1
 #define EN 4
-#define V_REF 4.4
 #define MID 512
-#define PAD 16
-
-float R1 = 6800.0;
-float R2 = 3800.0;
-float input_voltage = 0.0;
+#define PAD 0
 
 void updateDisplay(uint8_t, bool);
 
 void setup() { 
+  Serial.begin(9600);
+
   analogReference(DEFAULT);
   pinMode(M1, OUTPUT);
   pinMode(M2, OUTPUT);
@@ -32,7 +29,7 @@ void setup() {
   delay(200);
 
   oled.begin();  
-  oled.setFont(FONT6X8);
+  oled.setFont(FONT6X8P);
   oled.clear();
   oled.switchRenderFrame();
   oled.clear();
@@ -46,23 +43,18 @@ void setup() {
   oled.setCursor(0,1);
   oled.fillToEOL(0x02);
 
-  //  Page 2
-  oled.setCursor(2,2);
-  oled.print(F("Duty Cycle "));
-
-  // Page 3
-  oled.setCursor(0,3);
-  oled.clearToEOL();
-
   oled.on();
-  delay(200);
+  delay(500);
 
   updateDisplay(0, true);
+  
+  delay(500);
 }
 
 void loop()
 {
-    int analog_value = analogRead(A0);
+    int analog_value = analogRead(A0)+1;
+    analog_value = analog_value > 1023 ? 1023 : analog_value;
     int normalized_analog_value = analog_value - MID;
     uint8_t val = (abs(normalized_analog_value) - PAD) / 2;  
 
@@ -81,45 +73,36 @@ void loop()
 
     analogWrite(EN, val);
 
-    float temp = V_REF * (R1+R2) / R2;
-    input_voltage = analog_value * temp / 1024.0; 
+    delay(250);
 
     updateDisplay((uint8_t)val*100/255, normalized_analog_value > PAD);
+    
+    delay(250);
 
-    delay(500);
+    Serial.print(analog_value);
+    Serial.print(" [");
+    Serial.print(val);
+    Serial.print("]");
+    Serial.println();
 }
 
-
 void updateDisplay(uint8_t duty_cycle, bool is_clockwise) {
-  oled.setCursor(70,2); //11 characters x 6 plus 4 pixel spacer
-  oled.print((unsigned char)duty_cycle);
-  oled.setCursor(84,2);
-  oled.print(F("%"));
 
-  // Direction meter
-  oled.setCursor(2,3);
+  // Page 2 : Duty Cycle
+  oled.setCursor(0,2); 
   oled.clearToEOL();
+  oled.setCursor(48,2); 
+  oled.print(F("Duty Cycle"));  
+  oled.setCursor(2,2); 
+  oled.print((unsigned char)duty_cycle);
+  oled.setCursor(22,2);
+  oled.print(F(" %"));
 
-  oled.startData();
-  for (uint8_t i = duty_cycle/10+1; i > 0; i--) {     
-    if(is_clockwise){
-    //   0x00, 0x00, 0x41, 0x22, 0x14, 0x08,  ">"
-      oled.sendData(0x00);
-      oled.sendData(0x00);
-      oled.sendData(0x41);
-      oled.sendData(0x22);
-      oled.sendData(0x14);
-      oled.sendData(0x08);
-    }
-    else{
-      //  0x00, 0x08, 0x14, 0x22, 0x41, 0x00 "<"
-      oled.sendData(0x00);
-      oled.sendData(0x08);
-      oled.sendData(0x14);
-      oled.sendData(0x22);
-      oled.sendData(0x41);
-      oled.sendData(0x00);
-    }
-  }
-  oled.endData();
+  // Page 3 : Direction meter
+  oled.setCursor(0,3);
+  oled.clearToEOL();
+  oled.setCursor(2,3);
+
+  for (uint8_t i = duty_cycle/10; i > 0; i--)
+      oled.print(is_clockwise ? F("<") : F(">"));
 }
